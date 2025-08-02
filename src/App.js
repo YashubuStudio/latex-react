@@ -1,6 +1,24 @@
 import React, { useState } from 'react';
-import { AppBar, Toolbar, Typography, Box, Grid, Button, Snackbar, Alert, Container } from '@mui/material';
-import { TitleForm, AuthorForm, AbstractForm, SectionsForm, FiguresForm, ReferenceForm } from './components/form';
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Box,
+  Grid,
+  Button,
+  Snackbar,
+  Alert,
+  Container,
+} from '@mui/material';
+import jsPDF from 'jspdf';
+import {
+  TitleForm,
+  AuthorForm,
+  AbstractForm,
+  SectionsForm,
+  FiguresForm,
+  ReferenceForm,
+} from './components/form';
 
 function App() {
   const [title, setTitle] = useState('');
@@ -12,45 +30,39 @@ function App() {
   const [pdfUrl, setPdfUrl] = useState('');
   const [error, setError] = useState('');
 
-  const createFormData = () => {
-    const formData = new FormData();
-    const json = {
-      title,
-      author,
-      abstract,
-      body: sections.map((s) => ({ title: s.title, text: s.text })),
-      teaser: undefined,
-      figure: figures.map((f, idx) => ({
-        section_index: idx + 1,
-        caption: f.caption,
-      })),
-      reference: reference
-        ? reference.split('\n').map((ref) => ({ value: ref }))
-        : [],
-    };
-    formData.append('data', JSON.stringify(json));
-    figures.forEach((f) => {
-      formData.append('files', f.file ? f.file : new Blob());
-    });
-    if (!figures.length) {
-      formData.append('files', new Blob());
-    }
-    formData.append('teaser', new Blob());
-    return formData;
-  };
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     try {
-      const formData = createFormData();
-      const response = await fetch('http://localhost:8000/v1/pdf/create', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error('response was not ok');
+      const doc = new jsPDF();
+      let y = 10;
+
+      if (title) {
+        doc.setFontSize(16);
+        doc.text(title, 10, y);
+        y += 10;
       }
-      const blob = await response.blob();
+      if (author) {
+        doc.setFontSize(12);
+        doc.text(`著者: ${author}`, 10, y);
+        y += 10;
+      }
+      if (abstract) {
+        doc.text('概要', 10, y);
+        y += 10;
+        doc.text(abstract, 10, y);
+        y += 10;
+      }
+      sections.forEach((s, idx) => {
+        if (!s.title && !s.text) return;
+        doc.text(`${idx + 1}. ${s.title}`, 10, y);
+        y += 10;
+        if (s.text) {
+          doc.text(s.text, 10, y);
+          y += 10;
+        }
+      });
+
+      const blob = doc.output('blob');
       setPdfUrl(URL.createObjectURL(blob));
     } catch (err) {
       console.error(err);
@@ -93,9 +105,13 @@ function App() {
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="h6">pdf出力結果</Typography>
-            <Box mt={1} sx={{ border: '1px solid #ccc', minHeight: 800 }}>
+            <Box mt={1} sx={{ border: '1px solid #ccc', height: 560 }}>
               {pdfUrl ? (
-                <iframe title="pdf" src={pdfUrl} style={{ width: '100%', height: '100%' }} />
+                <iframe
+                  title="pdf"
+                  src={pdfUrl}
+                  style={{ width: '100%', height: '100%' }}
+                />
               ) : (
                 <Typography color="text.secondary">出力結果がありません</Typography>
               )}
