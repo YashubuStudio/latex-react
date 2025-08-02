@@ -1,81 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Box,
-  Grid,
-  Button,
-  Snackbar,
-  Alert,
-  Container,
-} from '@mui/material';
-import jsPDF from 'jspdf';
+  AppBar, Toolbar, Typography, Box, Grid, Button,
+  Snackbar, Alert, Container
+} from "@mui/material";
 import {
-  TitleForm,
-  AuthorForm,
-  AbstractForm,
-  SectionsForm,
-  FiguresForm,
-  ReferenceForm,
-} from './components/form';
+  TitleForm, AuthorForm, AbstractForm,
+  SectionsForm, FiguresForm, ReferenceForm,
+} from "./components/form";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import PaperPDF from "./components/PaperPDF";
 
 function App() {
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [abstract, setAbstract] = useState('');
-  const [sections, setSections] = useState([{ title: '', text: '' }]);
+  const [title, setTitle] = useState("");
+  const [author, setAuthor] = useState("");
+  const [abstract, setAbstract] = useState("");
+  const [sections, setSections] = useState([{ title: "", text: "" }]);
   const [figures, setFigures] = useState([]);
-  const [reference, setReference] = useState('');
-  const [pdfUrl, setPdfUrl] = useState('');
-  const [error, setError] = useState('');
+  const [reference, setReference] = useState("");
+  const [error, setError] = useState("");
+  const [pdfFigures, setPdfFigures] = useState([]);
+  const [pdfReady, setPdfReady] = useState(false);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    try {
-      const doc = new jsPDF();
-      let y = 10;
-
-      if (title) {
-        doc.setFontSize(16);
-        doc.text(title, 10, y);
-        y += 10;
-      }
-      if (author) {
-        doc.setFontSize(12);
-        doc.text(`著者: ${author}`, 10, y);
-        y += 10;
-      }
-      if (abstract) {
-        doc.text('概要', 10, y);
-        y += 10;
-        doc.text(abstract, 10, y);
-        y += 10;
-      }
-      sections.forEach((s, idx) => {
-        if (!s.title && !s.text) return;
-        doc.text(`${idx + 1}. ${s.title}`, 10, y);
-        y += 10;
-        if (s.text) {
-          doc.text(s.text, 10, y);
-          y += 10;
-        }
+  // DataURL化
+  const convertFigures = async (figs) => {
+    const promises = figs.map(async (f) => {
+      if (!f.file) return { ...f, dataUrl: null };
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(f.file);
       });
-
-      const blob = doc.output('blob');
-      setPdfUrl(URL.createObjectURL(blob));
-    } catch (err) {
-      console.error(err);
-      setError('PDF生成に失敗しました');
-    }
+      return { ...f, dataUrl };
+    });
+    return Promise.all(promises);
   };
 
-  const handleDownload = () => {
-    if (!pdfUrl) return;
-    const a = document.createElement('a');
-    a.href = pdfUrl;
-    a.download = 'paper.pdf';
-    a.click();
+  const handlePreparePdf = async () => {
+    try {
+      const figData = await convertFigures(figures);
+      setPdfFigures(figData);
+      setPdfReady(true);
+    } catch (e) {
+      setError("画像の変換に失敗しました");
+    }
   };
 
   return (
@@ -89,51 +56,56 @@ function App() {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Grid container spacing={2} justifyContent="center">
+        <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
-            <Box component="form" onSubmit={handleSubmit}>
-              <TitleForm title={title} onChangeTitle={setTitle} />
-              <AuthorForm author={author} onChangeAuthor={setAuthor} />
-              <AbstractForm abstract={abstract} onChangeAbstract={setAbstract} />
-              <SectionsForm sections={sections} onChangeSections={setSections} />
-              <FiguresForm figures={figures} onChangeFigures={setFigures} />
-              <ReferenceForm reference={reference} onChangeReference={setReference} />
-              <Button type="submit" variant="contained" fullWidth>
-                pdf出力
-              </Button>
-            </Box>
+            <TitleForm title={title} onChangeTitle={setTitle} />
+            <AuthorForm author={author} onChangeAuthor={setAuthor} />
+            <AbstractForm abstract={abstract} onChangeAbstract={setAbstract} />
+            <SectionsForm sections={sections} onChangeSections={setSections} />
+            <FiguresForm figures={figures} onChangeFigures={setFigures} />
+            <ReferenceForm reference={reference} onChangeReference={setReference} />
+            <Button
+              variant="contained"
+              fullWidth
+              sx={{ mt: 2 }}
+              onClick={handlePreparePdf}
+            >
+              PDFダウンロード準備
+            </Button>
           </Grid>
           <Grid item xs={12} md={6}>
-            <Typography variant="h6">pdf出力結果</Typography>
-            <Box mt={1} sx={{ border: '1px solid #ccc', height: 560 }}>
-              {pdfUrl ? (
-                <iframe
-                  title="pdf"
-                  src={pdfUrl}
-                  style={{ width: '100%', height: '100%' }}
-                />
-              ) : (
-                <Typography color="text.secondary">出力結果がありません</Typography>
+            <Typography variant="h6">PDFダウンロード</Typography>
+            <Box mt={1}>
+              {pdfReady && (
+                <PDFDownloadLink
+                  document={
+                    <PaperPDF
+                      title={title}
+                      author={author}
+                      abstract={abstract}
+                      sections={sections}
+                      figures={pdfFigures}
+                      reference={reference}
+                    />
+                  }
+                  fileName="paper.pdf"
+                  style={{ marginTop: 16, display: "block" }}
+                >
+                  {({ loading }) =>
+                    loading ? "PDF作成中..." : "PDFをダウンロード"
+                  }
+                </PDFDownloadLink>
               )}
             </Box>
-            <Button
-              sx={{ mt: 2 }}
-              variant="outlined"
-              fullWidth
-              disabled={!pdfUrl}
-              onClick={handleDownload}
-            >
-              ダウンロード
-            </Button>
           </Grid>
         </Grid>
       </Container>
       <Snackbar
         open={Boolean(error)}
         autoHideDuration={6000}
-        onClose={() => setError('')}
+        onClose={() => setError("")}
       >
-        <Alert severity="error" onClose={() => setError('')}>
+        <Alert severity="error" onClose={() => setError("")}>
           {error}
         </Alert>
       </Snackbar>
@@ -142,4 +114,3 @@ function App() {
 }
 
 export default App;
-
